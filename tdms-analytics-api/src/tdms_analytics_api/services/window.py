@@ -1,4 +1,4 @@
-"""Window service for data retrieval with downsampling."""
+"""Window service for data retrieval with downsampling using repository pattern."""
 from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID
@@ -8,16 +8,19 @@ from clickhouse_connect.driver import Client
 from loguru import logger
 
 from tdms_analytics.config import get_settings
+from tdms_analytics.repos.channel import ChannelRepository
 from tdms_analytics.utils.lttb import smart_downsample_production
 from tdms_analytics.utils.time_utils import parse_iso_to_timestamp
+from tdms_analytics.exceptions.channel import ChannelNotFoundError
 
 
 class WindowService:
-    """Service for windowed data retrieval."""
+    """Service for windowed data retrieval using repository pattern."""
     
     def __init__(self, db_client: Client):
         self.db = db_client
         self.settings = get_settings()
+        self.channel_repo = ChannelRepository(db_client)
     
     async def get_window(
         self,
@@ -30,26 +33,14 @@ class WindowService:
         points: int = 2000,
         method: str = "lttb"
     ) -> Dict[str, Any]:
-        """
-        Get windowed sensor data with downsampling.
-        
-        Args:
-            channel_id: Channel identifier
-            start: ISO start date (for time-based channels)
-            end: ISO end date (for time-based channels)  
-            start_sec: Relative start in seconds
-            end_sec: Relative end in seconds
-            relative: Return time as seconds from start
-            points: Target number of points for downsampling
-            method: Downsampling method
-            
-        Returns:
-            Windowed and downsampled data
-        """
+        """Get windowed sensor data with downsampling."""
         try:
-            # Get channel info
-            channel_info = await self._get_channel_info(channel_id)
-            has_time = channel_info["has_time"]
+            # Get channel info using repository
+            channel_data = await self.channel_repo.find_by_id(channel_id)
+            if not channel_data:
+                raise ChannelNotFoundError(str(channel_id))
+            
+            has_time = channel_data["has_time"]
             
             # Build query based on channel type and parameters
             if has_time:
@@ -92,6 +83,8 @@ class WindowService:
                 "relative": relative
             }
             
+        except ChannelNotFoundError:
+            raise
         except Exception as e:
             logger.error(f"Failed to get window for channel {channel_id}: {e}")
             raise
@@ -106,25 +99,14 @@ class WindowService:
         points: int = 2000,
         method: str = "lttb"
     ) -> Dict[str, Any]:
-        """
-        Get filtered and paginated sensor data window.
-        
-        Args:
-            channel_id: Channel identifier
-            start_timestamp: Unix timestamp start
-            end_timestamp: Unix timestamp end
-            cursor: Cursor for pagination
-            limit: Maximum raw points to retrieve
-            points: Target points after downsampling
-            method: Downsampling method
-            
-        Returns:
-            Filtered and paginated data with cursor
-        """
+        """Get filtered and paginated sensor data window."""
         try:
-            # Get channel info
-            channel_info = await self._get_channel_info(channel_id)
-            has_time = channel_info["has_time"]
+            # Get channel info using repository
+            channel_data = await self.channel_repo.find_by_id(channel_id)
+            if not channel_data:
+                raise ChannelNotFoundError(str(channel_id))
+            
+            has_time = channel_data["has_time"]
             
             if not has_time:
                 raise ValueError("Filtered window only supports time-based channels")
@@ -168,28 +150,13 @@ class WindowService:
                 "limit": limit
             }
             
+        except ChannelNotFoundError:
+            raise
         except Exception as e:
             logger.error(f"Failed to get filtered window for channel {channel_id}: {e}")
             raise
     
-    async def _get_channel_info(self, channel_id: UUID) -> Dict[str, Any]:
-        """Get channel information."""
-        result = self.db.query("""
-            SELECT channel_id, has_time, n_rows
-            FROM channels
-            WHERE channel_id = %(channel_id)s
-        """, {"channel_id": str(channel_id)})
-        
-        if not result.result_set:
-            raise ValueError(f"Channel {channel_id} not found")
-        
-        row = result.result_set[0]
-        return {
-            "channel_id": row[0],
-            "has_time": bool(row[1]),
-            "n_rows": row[2]
-        }
-    
+    # Méthodes privées restent avec accès direct DB pour performance des requêtes de données
     async def _get_time_based_window(
         self,
         channel_id: UUID,
@@ -260,21 +227,6 @@ class WindowService:
         """
         
         result = self.db.query(query, params)
-        
-        data = [
-            {"time": row[0], "value": row[1]}
-            for row in result.result_set
-        ]
-        
-        # Check if there's more data
-        has_more = len(data) > limit
-        if has_more:
-            data = data[:-1]  # Remove the extra record
-            next_cursor = data[-1]["time"] if data else None
-        else:
-            next_cursor = None
-        
-        return data, next_cursor)
         
         return [
             {"time": row[0], "value": row[1]}
@@ -353,4 +305,19 @@ class WindowService:
             LIMIT {limit + 1}
         """
         
-        result = self.db.query(query, params
+        result = self.db.query(query, params)
+        
+        data = [
+            {"time": row[0], "value": row[1]}
+            for row in result.result_set
+        ]
+        
+        # Check if there's more data
+        has_more = len(data) > limit
+        if has_more:
+            data = data[:-1]  # Remove the extra record
+            next_cursor = data[-1]["time"] if data else None
+        else:
+            next_cursor = None
+        
+        return data, next_cursor

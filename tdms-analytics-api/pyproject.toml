@@ -2,7 +2,7 @@
 name = "tdms-analytics-api"
 version = "0.1.0"
 description = "Analytics service for TDMS sensor data using ClickHouse"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Berteau Thomas <berteau.thomas@hotmail.fr>"]
 readme = "README.md"
 packages = [{include = "tdms_analytics_api", from = "src"}]
 

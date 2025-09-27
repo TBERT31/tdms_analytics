@@ -1,4 +1,4 @@
-"""Dataset service for managing datasets."""
+"""Dataset service using repository pattern."""
 from typing import Any, Dict, List
 from uuid import UUID
 
@@ -6,114 +6,41 @@ from clickhouse_connect.driver import Client
 from loguru import logger
 
 from tdms_analytics.entities.dataset import Dataset
-from tdms_analytics.entities.channel import Channel
+from tdms_analytics.repos.dataset import DatasetRepository
+from tdms_analytics.repos.channel import ChannelRepository
+from tdms_analytics.exceptions.dataset import DatasetNotFoundError
 
 
 class DatasetService:
-    """Service for dataset operations."""
+    """Service for dataset operations using repository pattern."""
     
     def __init__(self, db_client: Client):
-        self.db = db_client
+        self.dataset_repo = DatasetRepository(db_client)
+        self.channel_repo = ChannelRepository(db_client)
     
     async def list_datasets(self) -> List[Dataset]:
-        """
-        List all datasets.
-        
-        Returns:
-            List of all datasets
-        """
+        """List all datasets."""
         try:
-            result = self.db.query("""
-                SELECT 
-                    dataset_id,
-                    filename,
-                    created_at,
-                    total_points
-                FROM datasets
-                ORDER BY created_at DESC
-            """)
-            
-            datasets = []
-            for row in result.result_set:
-                dataset = Dataset(
-                    dataset_id=row[0],
-                    filename=row[1],
-                    created_at=row[2],
-                    total_points=row[3]
-                )
-                datasets.append(dataset)
-            
-            logger.info(f"Retrieved {len(datasets)} datasets")
-            return datasets
-            
+            dataset_data = await self.dataset_repo.find_all()
+            return [Dataset(**data) for data in dataset_data]
         except Exception as e:
             logger.error(f"Failed to list datasets: {e}")
             raise
     
     async def get_dataset_meta(self, dataset_id: UUID) -> Dict[str, Any]:
-        """
-        Get dataset metadata with channels.
-        
-        Args:
-            dataset_id: Dataset identifier
-            
-        Returns:
-            Dataset metadata with channels information
-        """
+        """Get dataset metadata with channels."""
         try:
             # Get dataset info
-            dataset_result = self.db.query("""
-                SELECT 
-                    dataset_id,
-                    filename,
-                    created_at,
-                    total_points
-                FROM datasets
-                WHERE dataset_id = %(dataset_id)s
-            """, {"dataset_id": str(dataset_id)})
+            dataset_data = await self.dataset_repo.find_by_id(dataset_id)
+            if not dataset_data:
+                raise DatasetNotFoundError(str(dataset_id))
             
-            if not dataset_result.result_set:
-                raise ValueError(f"Dataset {dataset_id} not found")
+            # Get channels for this dataset
+            channels_data = await self.channel_repo.find_by_dataset(dataset_id)
             
-            dataset_row = dataset_result.result_set[0]
-            dataset_info = {
-                "dataset_id": dataset_row[0],
-                "filename": dataset_row[1],
-                "created_at": dataset_row[2].isoformat() if dataset_row[2] else None,
-                "total_points": dataset_row[3]
-            }
-            
-            # Get channels info
-            channels_result = self.db.query("""
-                SELECT 
-                    channel_id,
-                    dataset_id,
-                    group_name,
-                    channel_name,
-                    unit,
-                    has_time,
-                    n_rows
-                FROM channels
-                WHERE dataset_id = %(dataset_id)s
-                ORDER BY group_name, channel_name
-            """, {"dataset_id": str(dataset_id)})
-            
-            channels = []
-            for row in channels_result.result_set:
-                channel = {
-                    "channel_id": row[0],
-                    "dataset_id": row[1],
-                    "group_name": row[2],
-                    "channel_name": row[3],
-                    "unit": row[4],
-                    "has_time": bool(row[5]),
-                    "n_rows": row[6]
-                }
-                channels.append(channel)
-            
-            # Group channels by group_name for better organization
+            # Group channels by group_name
             groups = {}
-            for channel in channels:
+            for channel in channels_data:
                 group_name = channel["group_name"]
                 if group_name not in groups:
                     groups[group_name] = {
@@ -123,86 +50,48 @@ class DatasetService:
                 groups[group_name]["channels"].append(channel)
             
             return {
-                "dataset": dataset_info,
-                "channels": channels,
+                "dataset": dataset_data,
+                "channels": channels_data,
                 "groups": list(groups.values()),
-                "total_channels": len(channels)
+                "total_channels": len(channels_data)
             }
             
-        except ValueError:
+        except DatasetNotFoundError:
             raise
         except Exception as e:
             logger.error(f"Failed to get dataset meta for {dataset_id}: {e}")
             raise
     
     async def delete_dataset(self, dataset_id: UUID) -> Dict[str, Any]:
-        """
-        Delete a dataset and all associated data.
-        
-        Args:
-            dataset_id: Dataset identifier
-            
-        Returns:
-            Deletion result
-        """
+        """Delete a dataset and all associated data."""
         try:
             # Check if dataset exists
-            dataset_result = self.db.query("""
-                SELECT dataset_id, filename
-                FROM datasets
-                WHERE dataset_id = %(dataset_id)s
-            """, {"dataset_id": str(dataset_id)})
+            dataset_data = await self.dataset_repo.find_by_id(dataset_id)
+            if not dataset_data:
+                raise DatasetNotFoundError(str(dataset_id))
             
-            if not dataset_result.result_set:
-                raise ValueError(f"Dataset {dataset_id} not found")
-            
-            filename = dataset_result.result_set[0][1]
+            filename = dataset_data["filename"]
             
             # Get channels to delete their data
-            channels_result = self.db.query("""
-                SELECT channel_id, has_time
-                FROM channels
-                WHERE dataset_id = %(dataset_id)s
-            """, {"dataset_id": str(dataset_id)})
+            channels_data = await self.channel_repo.find_by_dataset(dataset_id)
             
             channels_deleted = 0
             data_points_deleted = 0
             
             # Delete sensor data for each channel
-            for row in channels_result.result_set:
-                channel_id = row[0]
-                has_time = bool(row[1])
-                
-                table_name = "sensor_data_with_time" if has_time else "sensor_data"
-                
-                # Count points before deletion
-                count_result = self.db.query(f"""
-                    SELECT COUNT(*) FROM {table_name}
-                    WHERE channel_id = %(channel_id)s
-                """, {"channel_id": channel_id})
-                
-                points_count = count_result.result_set[0][0] if count_result.result_set else 0
-                data_points_deleted += points_count
-                
-                # Delete data
-                self.db.command(f"""
-                    DELETE FROM {table_name}
-                    WHERE channel_id = %(channel_id)s
-                """, {"channel_id": channel_id})
-                
+            for channel in channels_data:
+                channel_id = UUID(channel["channel_id"])
+                points_deleted = await self.channel_repo.delete_channel_data(channel_id)
+                data_points_deleted += points_deleted
                 channels_deleted += 1
             
             # Delete channels
-            self.db.command("""
-                DELETE FROM channels
-                WHERE dataset_id = %(dataset_id)s
-            """, {"dataset_id": str(dataset_id)})
+            for channel in channels_data:
+                channel_id = UUID(channel["channel_id"])
+                await self.channel_repo.delete(channel_id)
             
             # Delete dataset
-            self.db.command("""
-                DELETE FROM datasets
-                WHERE dataset_id = %(dataset_id)s
-            """, {"dataset_id": str(dataset_id)})
+            await self.dataset_repo.delete(dataset_id)
             
             logger.info(f"Deleted dataset {dataset_id} ({filename}): {channels_deleted} channels, {data_points_deleted} data points")
             
@@ -214,7 +103,7 @@ class DatasetService:
                 "data_points_deleted": data_points_deleted
             }
             
-        except ValueError:
+        except DatasetNotFoundError:
             raise
         except Exception as e:
             logger.error(f"Failed to delete dataset {dataset_id}: {e}")
