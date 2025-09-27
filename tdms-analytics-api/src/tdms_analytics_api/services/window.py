@@ -7,11 +7,11 @@ import pandas as pd
 from clickhouse_connect.driver import Client
 from loguru import logger
 
-from tdms_analytics.config import get_settings
-from tdms_analytics.repos.channel import ChannelRepository
-from tdms_analytics.utils.lttb import smart_downsample_production
-from tdms_analytics.utils.time_utils import parse_iso_to_timestamp
-from tdms_analytics.exceptions.channel import ChannelNotFoundError
+from tdms_analytics_api.config import get_settings
+from tdms_analytics_api.repos.channel import ChannelRepository
+from tdms_analytics_api.utils.lttb import smart_downsample_production
+from tdms_analytics_api.utils.time_utils import parse_iso_to_timestamp
+from tdms_analytics_api.exceptions.channel import ChannelNotFoundError
 
 
 class WindowService:

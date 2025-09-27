@@ -4,7 +4,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, Depends
 from clickhouse_connect.driver import Client
 
-from tdms_analytics.dependencies.database import get_db
+from tdms_analytics_api.dependencies.database import get_db
 
 router = APIRouter()
 

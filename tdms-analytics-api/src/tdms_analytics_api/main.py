@@ -8,9 +8,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from tdms_analytics.config import get_settings
-from tdms_analytics.dependencies.database import get_clickhouse_client
-from tdms_analytics.routes import (
+from tdms_analytics_api.config import get_settings
+from tdms_analytics_api.dependencies.database import get_clickhouse_client
+from tdms_analytics_api.routes import (
     channels,
     datasets,
     health,
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     
     settings = get_settings()
     uvicorn.run(
-        "tdms_analytics.main:app",
+        "tdms_analytics_api.main:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,

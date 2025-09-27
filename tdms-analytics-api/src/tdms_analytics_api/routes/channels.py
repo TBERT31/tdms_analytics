@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from clickhouse_connect.driver import Client
 from loguru import logger
 
-from tdms_analytics.dependencies.database import get_db
-from tdms_analytics.entities.channel import Channel
-from tdms_analytics.entities.time_range import TimeRange
-from tdms_analytics.services.channel import ChannelService
+from tdms_analytics_api.dependencies.database import get_db
+from tdms_analytics_api.entities.channel import Channel
+from tdms_analytics_api.entities.time_range import TimeRange
+from tdms_analytics_api.services.channel import ChannelService
 
 router = APIRouter()
 

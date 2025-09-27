@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from clickhouse_connect.driver import Client
 from loguru import logger
 
-from tdms_analytics.dependencies.database import get_db
-from tdms_analytics.entities.dataset import Dataset
-from tdms_analytics.services.dataset import DatasetService
+from tdms_analytics_api.dependencies.database import get_db
+from tdms_analytics_api.entities.dataset import Dataset
+from tdms_analytics_api.services.dataset import DatasetService
 
 router = APIRouter()
 

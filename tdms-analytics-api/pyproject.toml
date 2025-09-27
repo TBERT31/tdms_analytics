@@ -6,6 +6,9 @@ authors = ["Berteau Thomas <berteau.thomas@hotmail.fr>"]
 readme = "README.md"
 packages = [{include = "tdms_analytics_api", from = "src"}]
 
+[tool.poetry.scripts]
+init_db = "tdms_analytics_api.scripts.init_db:main"
+
 [tool.poetry.dependencies]
 python = "^3.11"
 fastapi = "^0.104.1"
@@ -61,7 +64,7 @@ extend-exclude = '''
 profile = "black"
 multi_line_output = 3
 line_length = 88
-known_first_party = ["tdms_analytics"]
+known_first_party = ["tdms_analytics_api"]
 
 [tool.mypy]
 python_version = "3.11"

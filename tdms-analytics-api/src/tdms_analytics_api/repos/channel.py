@@ -2,7 +2,7 @@
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from tdms_analytics.repos.base import BaseRepository
+from tdms_analytics_api.repos.base import BaseRepository
 
 
 class ChannelRepository(BaseRepository):

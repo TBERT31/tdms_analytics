@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from clickhouse_connect.driver import Client
 from loguru import logger
 
-from tdms_analytics.config import get_settings
-from tdms_analytics.dependencies.database import get_db
-from tdms_analytics.enums.downsampling import DownsamplingMethod
-from tdms_analytics.services.window import WindowService
+from tdms_analytics_api.config import get_settings
+from tdms_analytics_api.dependencies.database import get_db
+from tdms_analytics_api.enums.downsampling import DownsamplingMethod
+from tdms_analytics_api.services.window import WindowService
 
 router = APIRouter()
 

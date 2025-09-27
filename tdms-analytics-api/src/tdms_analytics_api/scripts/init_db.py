@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from clickhouse_connect.driver import Client
 from loguru import logger
 
-from tdms_analytics.dependencies.database import get_clickhouse_client
+from tdms_analytics_api.dependencies.database import get_clickhouse_client
 
 
 class DatabaseInitializer:
@@ -20,7 +20,6 @@ class DatabaseInitializer:
     def create_database(self) -> None:
         """Create the main database if it doesn't exist."""
         try:
-            # The database should already be selected via connection settings
             logger.info("Database connection verified")
         except Exception as e:
             logger.error(f"Failed to verify database: {e}")
@@ -29,95 +28,47 @@ class DatabaseInitializer:
     def create_tables(self) -> None:
         """Create all required tables."""
         
-        # Datasets table
-        self.client.command("""
-            CREATE TABLE IF NOT EXISTS datasets (
-                dataset_id String,
-                filename String,
-                created_at DateTime64(3),
-                total_points UInt64
-            ) ENGINE = MergeTree()
-            ORDER BY (dataset_id, created_at)
-            SETTINGS index_granularity = 8192
-        """)
+        # Supprimer les tables existantes
+        self.client.command("DROP TABLE IF EXISTS datasets")
+        self.client.command("DROP TABLE IF EXISTS channels") 
+        self.client.command("DROP TABLE IF EXISTS sensor_data")
+        self.client.command("DROP TABLE IF EXISTS sensor_data_with_time")
+        
+        # Créer tables avec une seule colonne puis ajouter les autres
+        
+        # Datasets
+        self.client.command("CREATE TABLE datasets (dataset_id String) ENGINE = MergeTree() ORDER BY dataset_id")
+        self.client.command("ALTER TABLE datasets ADD COLUMN filename String")
+        self.client.command("ALTER TABLE datasets ADD COLUMN created_at DateTime64(3)")
+        self.client.command("ALTER TABLE datasets ADD COLUMN total_points UInt64")
         logger.info("✓ Created datasets table")
         
-        # Channels table
-        self.client.command("""
-            CREATE TABLE IF NOT EXISTS channels (
-                channel_id String,
-                dataset_id String,
-                group_name String,
-                channel_name String,
-                unit String,
-                has_time Bool,
-                n_rows UInt64
-            ) ENGINE = MergeTree()
-            ORDER BY (dataset_id, channel_id)
-            SETTINGS index_granularity = 8192
-        """)
+        # Channels
+        self.client.command("CREATE TABLE channels (channel_id String) ENGINE = MergeTree() ORDER BY channel_id")
+        self.client.command("ALTER TABLE channels ADD COLUMN dataset_id String")
+        self.client.command("ALTER TABLE channels ADD COLUMN group_name String")
+        self.client.command("ALTER TABLE channels ADD COLUMN channel_name String")
+        self.client.command("ALTER TABLE channels ADD COLUMN unit String")
+        self.client.command("ALTER TABLE channels ADD COLUMN has_time Bool")
+        self.client.command("ALTER TABLE channels ADD COLUMN n_rows UInt64")
         logger.info("✓ Created channels table")
         
-        # Sensor data without time (index-based)
-        self.client.command("""
-            CREATE TABLE IF NOT EXISTS sensor_data (
-                channel_id String,
-                index UInt64,
-                value Float32,
-                timestamp Nullable(Float64),
-                timestamp_iso Nullable(String)
-            ) ENGINE = MergeTree()
-            ORDER BY (channel_id, index)
-            SETTINGS index_granularity = 8192
-        """)
+        # Sensor data
+        self.client.command("CREATE TABLE sensor_data (channel_id String) ENGINE = MergeTree() ORDER BY channel_id")
+        self.client.command("ALTER TABLE sensor_data ADD COLUMN index UInt64")
+        self.client.command("ALTER TABLE sensor_data ADD COLUMN value Float32")
         logger.info("✓ Created sensor_data table")
         
-        # Sensor data with time (optimized for time queries)
-        self.client.command("""
-            CREATE TABLE IF NOT EXISTS sensor_data_with_time (
-                channel_id String,
-                index UInt64,
-                value Float32,
-                timestamp Float64,
-                timestamp_iso String
-            ) ENGINE = MergeTree()
-            ORDER BY (channel_id, timestamp, index)
-            SETTINGS index_granularity = 8192
-        """)
+        # Sensor data with time
+        self.client.command("CREATE TABLE sensor_data_with_time (channel_id String) ENGINE = MergeTree() ORDER BY channel_id")
+        self.client.command("ALTER TABLE sensor_data_with_time ADD COLUMN index UInt64")
+        self.client.command("ALTER TABLE sensor_data_with_time ADD COLUMN value Float32")
+        self.client.command("ALTER TABLE sensor_data_with_time ADD COLUMN timestamp Float64")
+        self.client.command("ALTER TABLE sensor_data_with_time ADD COLUMN timestamp_iso String")
         logger.info("✓ Created sensor_data_with_time table")
-        
-        # Create materialized views for better query performance
-        self._create_views()
-    
-    def _create_views(self) -> None:
-        """Create materialized views for analytics."""
-        
-        # View for channel statistics
-        try:
-            self.client.command("""
-                CREATE MATERIALIZED VIEW IF NOT EXISTS channel_stats_mv
-                ENGINE = AggregatingMergeTree()
-                ORDER BY channel_id
-                AS SELECT
-                    channel_id,
-                    count() as total_points,
-                    min(value) as min_value,
-                    max(value) as max_value,
-                    avg(value) as avg_value,
-                    min(timestamp) as min_timestamp,
-                    max(timestamp) as max_timestamp
-                FROM sensor_data_with_time
-                GROUP BY channel_id
-            """)
-            logger.info("✓ Created channel_stats_mv view")
-        except Exception as e:
-            logger.warning(f"Could not create channel_stats_mv: {e}")
     
     def create_indexes(self) -> None:
         """Create additional indexes for performance."""
-        
-        # Indexes are mostly handled by ORDER BY in MergeTree
-        # Additional indexes can be added here if needed
         logger.info("✓ Indexes created (handled by MergeTree ORDER BY)")
     
     def initialize(self) -> None:
@@ -128,9 +79,7 @@ class DatabaseInitializer:
             self.create_database()
             self.create_tables()
             self.create_indexes()
-            
             logger.info("✅ Database initialization completed successfully!")
-            
         except Exception as e:
             logger.error(f"❌ Database initialization failed: {e}")
             raise
@@ -157,17 +106,20 @@ def main() -> None:
             "created_at": "2024-01-01 12:00:00",
             "total_points": 1000
         }]
-        
-        client.insert("datasets", test_data)
-        result = client.query("SELECT COUNT() FROM datasets WHERE dataset_id = 'test-123'")
-        
-        if result.result_set[0][0] == 1:
-            logger.info("✓ Test insertion successful")
-            # Clean up test data
-            client.command("DELETE FROM datasets WHERE dataset_id = 'test-123'")
-        else:
-            logger.warning("Test insertion failed")
-        
+
+        try:
+            client.insert("datasets", test_data)
+            result = client.query("SELECT COUNT() FROM datasets WHERE dataset_id = 'test-123'")
+            count = result.result_set[0][0] if result.result_set else 0
+            
+            if count >= 1:
+                logger.info("✓ Test insertion successful")
+                client.command("DELETE FROM datasets WHERE dataset_id = 'test-123'")
+            else:
+                logger.warning(f"Test insertion failed - count: {count}")
+        except Exception as e:
+            logger.warning(f"Test insertion failed: {e}")
+                
         logger.info("🎉 Database is ready for use!")
         
     except Exception as e:

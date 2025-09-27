@@ -5,10 +5,10 @@ from uuid import UUID
 from clickhouse_connect.driver import Client
 from loguru import logger
 
-from tdms_analytics.entities.dataset import Dataset
-from tdms_analytics.repos.dataset import DatasetRepository
-from tdms_analytics.repos.channel import ChannelRepository
-from tdms_analytics.exceptions.dataset import DatasetNotFoundError
+from tdms_analytics_api.entities.dataset import Dataset
+from tdms_analytics_api.repos.dataset import DatasetRepository
+from tdms_analytics_api.repos.channel import ChannelRepository
+from tdms_analytics_api.exceptions.dataset import DatasetNotFoundError
 
 
 class DatasetService:

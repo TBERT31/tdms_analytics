@@ -5,13 +5,13 @@ from uuid import UUID
 from clickhouse_connect.driver import Client
 from loguru import logger
 
-from tdms_analytics.entities.channel import Channel
-from tdms_analytics.entities.time_range import TimeRange
-from tdms_analytics.repos.channel import ChannelRepository
-from tdms_analytics.repos.dataset import DatasetRepository
-from tdms_analytics.exceptions.channel import ChannelNotFoundError
-from tdms_analytics.exceptions.dataset import DatasetNotFoundError
-from tdms_analytics.utils.time_utils import timestamp_to_iso
+from tdms_analytics_api.entities.channel import Channel
+from tdms_analytics_api.entities.time_range import TimeRange
+from tdms_analytics_api.repos.channel import ChannelRepository
+from tdms_analytics_api.repos.dataset import DatasetRepository
+from tdms_analytics_api.exceptions.channel import ChannelNotFoundError
+from tdms_analytics_api.exceptions.dataset import DatasetNotFoundError
+from tdms_analytics_api.utils.time_utils import timestamp_to_iso
 
 
 class ChannelService:

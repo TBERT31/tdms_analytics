@@ -6,7 +6,7 @@ import clickhouse_connect
 from clickhouse_connect.driver import Client
 from loguru import logger
 
-from tdms_analytics.config import get_settings
+from tdms_analytics_api.config import get_settings
 
 
 @lru_cache

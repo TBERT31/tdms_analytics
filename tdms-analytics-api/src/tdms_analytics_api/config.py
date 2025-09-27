@@ -34,8 +34,8 @@ class Settings(BaseSettings):
     CLICKHOUSE_HOST: str = Field(default="localhost", env="CLICKHOUSE_HOST")
     CLICKHOUSE_PORT: int = Field(default=8123, env="CLICKHOUSE_PORT")
     CLICKHOUSE_USERNAME: str = Field(default="default", env="CLICKHOUSE_USERNAME")
-    CLICKHOUSE_PASSWORD: str = Field(default="", env="CLICKHOUSE_PASSWORD")
-    CLICKHOUSE_DATABASE: str = Field(default="tdms_analytics", env="CLICKHOUSE_DATABASE")
+    CLICKHOUSE_PASSWORD: str = Field(default="pass", env="CLICKHOUSE_PASSWORD")
+    CLICKHOUSE_DATABASE: str = Field(default="default", env="CLICKHOUSE_DATABASE")
     CLICKHOUSE_SECURE: bool = Field(default=False, env="CLICKHOUSE_SECURE")
     
     # File upload settings
